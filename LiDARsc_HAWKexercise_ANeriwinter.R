@@ -1,4 +1,8 @@
-#(HAWK job intervew exercise - LiDAR pointcloud processing)
+#Topic: (HAWK job interview exercise - LiDAR pointcloud processing)
+#Author: Ariel F Neri Winter
+#Date: 06 Marz 2025
+
+
 setwd("P:/datahawk/lidarhawk/")
 
 #Load packages
@@ -14,14 +18,14 @@ library(RCSF)
 las <- readLAS("als_data.laz")
 boundary <- st_read("stand_boundary.gpkg")
 
-#Explore data and preprocessing####
+#Explore data and pre-procesing####
 # Check summary statistics
 summary(las)
 
-# visualizae
+# visualize
 plot(las, color = "Z")
 
-# optional- Identify and remove extreme values (outliers) 
+# optional- Identify and remove extreme values (possible outliers) 
 las <- filter_poi(las, Z > quantile(las@data$Z, 0.01) & Z < quantile(las@data$Z, 0.99))
 
 #check CRS is the same in both files
@@ -39,11 +43,13 @@ polygon_area_ha <- as.numeric(st_area(boundary) / 10000)
 
 #clip las
 las_clipped <- clip_roi(las, boundary)
+# visualize
+plot(las_clipped, color = "Z")
 
 # Compute basic metrics
 metrics <- cloud_metrics(las_clipped, .stdmetrics)
 #write.csv(metrics, "forest_lidar_metrics.csv") #save csv (optional)
-#z values are over 400, which means the cloud is not normalized.
+#z values are over 400, which means the cloud is not normalized. (values are elevation)
 
 #Normalize to ground
 # Classify ground points using a filtering algorithm
@@ -60,14 +66,12 @@ chm <- rasterize_canopy(las_norm, res = 1, p2r())
 #Processing
 #1. find tree tops####
 ttops <- locate_trees(las_clipped, lmf(ws = 5))
-plot(las_clipped, bg = "white", size = 2)
-add_treetops3d(ttops)
 
 
 #2. Determine height of all trees ####
 tree_heights <- extract(chm, ttops)
 ttops$Height <- tree_heights
-ttops$Height <- as.numeric(ttops$Height$Z) #ensure is numeric
+ttops$Height <- as.numeric(ttops$Height$Z) #ensure is numeric (otherwise is a "double")
 #check tree heights
 summary(ttops$Height)
 plot(ttops$Height)
@@ -79,7 +83,7 @@ tree_density
 
 
 #3.Estimate DBH####
-ttops$BHD <- (ttops$Height / 47)^2
+ttops$BHD <- (ttops$Height / 47)^2 #could remove trees under 1.3m (BH), in theory they should not contribute.
 #check DBH values
 summary(ttops$BHD)
 plot(ttops$BHD)
@@ -100,7 +104,6 @@ ggplot(ttops, aes(x = BHD)) +
 
 
 # 5. calculate basal area####
-
 ttops$BasalArea <- pi * ((ttops$BHD) / 2)^2
 # Sum of basal areas per hectare
 basal_area_ha <- sum(ttops$BasalArea) / (st_area(boundary) / 10000)
